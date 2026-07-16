@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  passwordHash  String
+  googleTokens  String? // JSON blob: access/refresh tokens once connected
+  outlookTokens String? // JSON blob
+  createdAt     DateTime @default(now())
+}
+
+// A Floor is one horizontal slice of the cutaway building (basement, ground,
+// mezzanine x2, floors 1-4). level is used purely for vertical ordering/render.
+model Floor {
+  id          String   @id @default(cuid())
+  level       Int      @unique // -1 = basement, 0 = ground, 1 = mezzanine1, 2 = mezzanine2, 3..6 = floors 1-4
+  name        String
+  subtitle    String
+  kind        String // "basement" | "reception" | "admin" | "classroom" | "accessible"
+  colorTag    String   @default("free") // computed cache: free|light|busy|almost|full
+  studentFacing Boolean @default(true)
+  rooms       Room[]
+}
+
+model Room {
+  id         String   @id @default(cuid())
+  floorId    String
+  floor      Floor    @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  name       String
+  capacity   Int
+  equipment  String // comma-separated: "PC,Projecteur,Tableau interactif"
+  status     String   @default("Libre") // Libre | Occupée | Maintenance
+  courses    Course[]
+}
+
+model Teacher {
+  id             String   @id @default(cuid())
+  firstName      String
+  lastName       String
+  photoUrl       String?
+  phone          String
+  email          String
+  subject        String
+  availability   String // free text e.g. "Lun-Ven 9h-17h"
+  courses        Course[]
+}
+
+model Course {
+  id           String    @id @default(cuid())
+  title        String
+  type         String // "Langues" | "Informatique" | "IA" | "Soutien scolaire" | "Accompagnement"
+  roomId       String
+  room         Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  teacherId    String
+  teacher      Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  dayOfWeek    Int // 0=Lundi ... 6=Dimanche
+  startHour    Float // e.g. 9.5 = 9h30
+  endHour      Float
+  weekOffset   Int       @default(0) // 0 = semaine courante, supporte +/- pour navigation
+  maxSeats     Int
+  status       String    @default("Disponible") // Disponible | Complet | Annulé
+  students     Enrollment[]
+}
+
+model Student {
+  id           String       @id @default(cuid())
+  firstName    String
+  lastName     String
+  age          Int
+  phone        String
+  email        String
+  level        String
+  photoUrl     String?
+  registeredAt DateTime     @default(now())
+  enrollments  Enrollment[]
+}
+
+model Enrollment {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  attendance  String   @default("Non renseigné") // Présent | Absent | Retard | Non renseigné
+  payment     String   @default("À jour") // À jour | En attente | En retard
+
+  @@unique([studentId, courseId])
+}
